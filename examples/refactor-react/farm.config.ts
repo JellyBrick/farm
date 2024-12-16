@@ -8,12 +8,19 @@ function custom() {
     name: "farm-test-plugin-name",
     buildStart: {
       executor() {
-        console.log("buildStart");
+        // console.log("buildStart");
       }
+    },
+    config(config) {
+      config.plugins.push({
+        name: "test-add-plugin"
+      })
+      return config
     },
     resolve: {
       filters: {
-        importers: ['^.*$']
+        importers: ['^.*$'],
+        sources: ['.*'],
       },
       executor(param) {
       }
@@ -60,7 +67,12 @@ export default defineConfig({
     output: {
       // publicPath: "/aaa/",
     },
-  }
+  },
+  server: {
+    port: 4855,
+    appType: "mpa",
+    https: true
+  },
 });
 
 function myCustomPlugin() {

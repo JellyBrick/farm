@@ -118,7 +118,7 @@ export class Server extends httpServer {
   root: string;
   resolvedUserConfig: ResolvedUserConfig;
   closeHttpServerFn: () => Promise<void>;
-  terminateServerFn: () => Promise<void>;
+  terminateServerFn: (_: unknown, exitCode?: number) => Promise<void>;
   postConfigureServerHooks: ((() => void) | void)[] = [];
   logger: Logger;
 
@@ -128,6 +128,7 @@ export class Server extends httpServer {
    */
   constructor(readonly inlineConfig: FarmCliOptions & UserConfig) {
     super();
+    this.logger = new Logger();
   }
 
   /**
@@ -204,11 +205,19 @@ export class Server extends httpServer {
       // init middlewares
       this.#initializeMiddlewares();
 
-      this.terminateServerFn = async () => {
-        await this.close();
-        process.exit(0);
+      this.terminateServerFn = async (_: unknown, exitCode?: number) => {
+        try {
+          await this.close();
+        } finally {
+          process.exitCode ??= exitCode ? 128 + exitCode : undefined;
+          process.exit();
+        }
       };
-      setupSIGTERMListener(this.terminateServerFn);
+
+      if (!this.serverOptions.middlewareMode) {
+        setupSIGTERMListener(this.terminateServerFn);
+      }
+
       if (!this.serverOptions.middlewareMode && this.httpServer) {
         this.httpServer.once('listening', () => {
           // update actual port since this may be different from initial value
@@ -428,7 +437,7 @@ export class Server extends httpServer {
       }
     } catch (error) {
       this.resolvedUserConfig.logger.error(
-        `start farm dev server error: ${error} \n ${error.stack}`
+        `Start DevServer Error: ${error} \n ${error.stack}`
       );
       // throw error;
     }
@@ -686,7 +695,12 @@ export class Server extends httpServer {
       teardownSIGTERMListener(this.terminateServerFn);
     }
 
-    await Promise.allSettled([this.ws.wss.close(), this.closeHttpServerFn()]);
+    await Promise.allSettled([
+      this.watcher.watcher.close(),
+      this.ws.wss.close(),
+      this.closeHttpServerFn()
+    ]);
+    this.resolvedUrls = null;
   }
 
   printUrls() {
